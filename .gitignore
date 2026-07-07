@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# secrets and generated output, never commit these
+.env
+secrets/
+output/
+config.yaml
+notifier/.seen_campaigns.json

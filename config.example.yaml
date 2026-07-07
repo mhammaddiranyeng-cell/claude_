@@ -1,0 +1,33 @@
+# Copy to config.yaml and edit per campaign.
+
+campaign:
+  name: "example-campaign"
+  hashtags: ["#fyp", "#clips"]
+  caption_template: "{title} 🔥 {hashtags}"
+
+clipping:
+  min_clip_seconds: 20
+  max_clip_seconds: 90
+  max_clips_per_video: 8
+  # Words/phrases that bump a segment's highlight score (case-insensitive).
+  # Tune this per niche/creator.
+  trigger_phrases:
+    - "no way"
+    - "what the"
+    - "insane"
+    - "crazy"
+    - "let's go"
+    - "i can't believe"
+
+reframe:
+  mode: "blur-bg"   # "blur-bg" | "center-crop"
+  width: 1080
+  height: 1920
+
+captions:
+  enabled: true
+  font: "Arial"
+  font_size: 64
+  position: "bottom"   # "bottom" | "center"
+
+output_dir: "./output"
