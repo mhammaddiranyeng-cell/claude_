@@ -27,7 +27,8 @@ reframe:
 captions:
   enabled: true
   font: "Arial"
-  font_size: 64
+  font_size: 46
+  max_words_per_line: 4
   position: "bottom"   # "bottom" | "center"
 
 output_dir: "./output"

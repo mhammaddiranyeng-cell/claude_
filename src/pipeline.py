@@ -59,11 +59,14 @@ def run(input_path: str, config_path: str) -> None:
         )
 
         if captions_cfg.get("enabled", True):
-            build_srt(segments, h.start, h.end, srt_path)
+            build_srt(
+                segments, h.start, h.end, srt_path,
+                max_words_per_line=captions_cfg.get("max_words_per_line", 4),
+            )
             burn_captions(
                 vertical_path, srt_path, final_path,
                 font=captions_cfg.get("font", "Arial"),
-                font_size=captions_cfg.get("font_size", 64),
+                font_size=captions_cfg.get("font_size", 46),
                 position=captions_cfg.get("position", "bottom"),
             )
         else:

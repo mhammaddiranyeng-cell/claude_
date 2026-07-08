@@ -13,7 +13,7 @@ def _fmt_ts(seconds: float) -> str:
     return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
 
 
-def build_srt(segments: List[Segment], clip_start: float, clip_end: float, srt_path: str, max_words_per_line: int = 6) -> None:
+def build_srt(segments: List[Segment], clip_start: float, clip_end: float, srt_path: str, max_words_per_line: int = 4) -> None:
     words = [w for s in segments for w in s.words if clip_start <= w.start < clip_end]
 
     entries = []
@@ -28,9 +28,12 @@ def build_srt(segments: List[Segment], clip_start: float, clip_end: float, srt_p
             f.write(f"{idx}\n{_fmt_ts(max(start, 0))} --> {_fmt_ts(max(end, 0))}\n{text}\n\n")
 
 
-def burn_captions(in_path: str, srt_path: str, out_path: str, font: str = "Arial", font_size: int = 64, position: str = "bottom") -> None:
+def burn_captions(in_path: str, srt_path: str, out_path: str, font: str = "Arial", font_size: int = 46, position: str = "bottom") -> None:
     alignment = 2 if position == "bottom" else 5  # libass numpad alignment codes
-    style = f"FontName={font},FontSize={font_size},Alignment={alignment},Outline=3,Bold=1"
+    style = (
+        f"FontName={font},FontSize={font_size},Alignment={alignment},"
+        f"Outline=3,Bold=1,MarginV=80,MarginL=60,MarginR=60"
+    )
     vf = f"subtitles={srt_path}:force_style='{style}'"
 
     cmd = [
