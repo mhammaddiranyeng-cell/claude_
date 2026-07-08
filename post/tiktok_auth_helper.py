@@ -109,6 +109,9 @@ def main() -> None:
     token_resp.raise_for_status()
     data = token_resp.json()
 
+    if "access_token" not in data:
+        raise SystemExit(f"TikTok token exchange did not return an access_token. Full response: {data}")
+
     print("\nSuccess. Add these to your local .env:\n")
     print(f"TIKTOK_ACCESS_TOKEN={data['access_token']}")
     print(f"TIKTOK_REFRESH_TOKEN={data['refresh_token']}")
