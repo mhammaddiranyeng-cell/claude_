@@ -10,6 +10,8 @@ a URL for you to open and approve in your browser, then prints the resulting
 access_token / refresh_token for you to paste into your own .env. Nothing is
 sent anywhere except TikTok's official OAuth endpoints.
 """
+import base64
+import hashlib
 import http.server
 import os
 import secrets
@@ -47,12 +49,21 @@ class _CallbackHandler(http.server.BaseHTTPRequestHandler):
         pass  # keep the console quiet
 
 
+def _make_pkce_pair():
+    verifier = base64.urlsafe_b64encode(secrets.token_bytes(32)).rstrip(b"=").decode()
+    challenge = base64.urlsafe_b64encode(
+        hashlib.sha256(verifier.encode("ascii")).digest()
+    ).rstrip(b"=").decode()
+    return verifier, challenge
+
+
 def main() -> None:
     load_dotenv()
     client_key = os.environ["TIKTOK_CLIENT_KEY"]
     client_secret = os.environ["TIKTOK_CLIENT_SECRET"]
 
     state = secrets.token_urlsafe(16)
+    code_verifier, code_challenge = _make_pkce_pair()
 
     auth_params = {
         "client_key": client_key,
@@ -60,6 +71,8 @@ def main() -> None:
         "scope": SCOPE,
         "redirect_uri": REDIRECT_URI,
         "state": state,
+        "code_challenge": code_challenge,
+        "code_challenge_method": "S256",
     }
     auth_url = f"{AUTHORIZE_URL}?{urllib.parse.urlencode(auth_params)}"
 
@@ -67,7 +80,9 @@ def main() -> None:
     thread = threading.Thread(target=server.handle_request)  # handles exactly one request
     thread.start()
 
-    print("Opening your browser to approve access. If it doesn't open automatically, visit:\n")
+    print("Opening your browser to approve access. If it doesn't open automatically, visit")
+    print("this EXACT link (don't reuse a tab/link from a previous run -- each run has its")
+    print("own one-time code_challenge):\n")
     print(auth_url, "\n")
     webbrowser.open(auth_url)
 
@@ -90,6 +105,7 @@ def main() -> None:
             "code": _result["code"],
             "grant_type": "authorization_code",
             "redirect_uri": REDIRECT_URI,
+            "code_verifier": code_verifier,
         },
     )
     token_resp.raise_for_status()
