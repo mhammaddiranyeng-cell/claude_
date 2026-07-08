@@ -50,10 +50,10 @@ class _CallbackHandler(http.server.BaseHTTPRequestHandler):
 
 
 def _make_pkce_pair():
+    # TikTok deviates from RFC 7636 here: despite calling it "S256", they want
+    # code_challenge = hex(SHA256(code_verifier)), not base64url(SHA256(...)).
     verifier = base64.urlsafe_b64encode(secrets.token_bytes(32)).rstrip(b"=").decode()
-    challenge = base64.urlsafe_b64encode(
-        hashlib.sha256(verifier.encode("ascii")).digest()
-    ).rstrip(b"=").decode()
+    challenge = hashlib.sha256(verifier.encode("ascii")).hexdigest()
     return verifier, challenge
 
 
