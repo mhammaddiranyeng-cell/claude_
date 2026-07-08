@@ -1,5 +1,5 @@
 """Reframe a horizontal (or mixed) clip into a vertical 9:16 output."""
-import subprocess
+from .ffmpeg_utils import run_ffmpeg
 
 
 def reframe_vertical(in_path: str, out_path: str, mode: str = "blur-bg", width: int = 1080, height: int = 1920) -> None:
@@ -21,4 +21,4 @@ def reframe_vertical(in_path: str, out_path: str, mode: str = "blur-bg", width: 
         "-c:a", "copy",
         out_path,
     ]
-    subprocess.run(cmd, check=True, capture_output=True)
+    run_ffmpeg(cmd)

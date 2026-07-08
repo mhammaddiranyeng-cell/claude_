@@ -1,7 +1,7 @@
 """Build an SRT for a clip window and burn it into the video."""
-import subprocess
 from typing import List
 
+from .ffmpeg_utils import run_ffmpeg
 from .transcribe import Segment
 
 
@@ -41,4 +41,4 @@ def burn_captions(in_path: str, srt_path: str, out_path: str, font: str = "Arial
         "-c:a", "copy",
         out_path,
     ]
-    subprocess.run(cmd, check=True, capture_output=True)
+    run_ffmpeg(cmd)

@@ -1,5 +1,5 @@
 """Cut a clip out of the source video with ffmpeg (re-encoded for frame-accurate cuts)."""
-import subprocess
+from .ffmpeg_utils import run_ffmpeg
 
 
 def cut_clip(source_path: str, start: float, end: float, out_path: str) -> None:
@@ -13,4 +13,4 @@ def cut_clip(source_path: str, start: float, end: float, out_path: str) -> None:
         "-c:a", "aac", "-b:a", "192k",
         out_path,
     ]
-    subprocess.run(cmd, check=True, capture_output=True)
+    run_ffmpeg(cmd)
