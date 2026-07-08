@@ -2,6 +2,9 @@
 
 campaign:
   name: "example-campaign"
+  # Paste the campaign's brief/description here -- the editing style below
+  # is auto-picked from keywords in this text (see `editing`).
+  description: ""
   hashtags: ["#fyp", "#clips"]
   caption_template: "{title} 🔥 {hashtags}"
 
@@ -18,6 +21,14 @@ clipping:
     - "crazy"
     - "let's go"
     - "i can't believe"
+
+# Each of these can be true/false, or "auto" to derive it from
+# campaign.description (see src/style.py for the keyword rules).
+editing:
+  jump_cuts: "auto"          # cut out dead air/silence for snappier pacing
+  kenburns: "auto"           # subtle zoom/pan on otherwise-static shots
+  caption_style: "auto"      # "line" (static) | "karaoke" (word-by-word highlight)
+  silence_min_duration: "auto"   # seconds of silence before it counts as a cut
 
 reframe:
   mode: "blur-bg"   # "blur-bg" | "center-crop"

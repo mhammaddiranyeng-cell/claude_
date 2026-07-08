@@ -12,8 +12,11 @@ import yaml
 from .transcribe import transcribe
 from .highlights import find_highlights
 from .clipper import cut_clip
+from .jumpcuts import detect_silences, compute_keep_segments, apply_jump_cuts, remap_timestamp
 from .reframe import reframe_vertical
-from .captions import build_srt, burn_captions
+from .zoom import apply_kenburns
+from .captions import extract_words, build_srt, build_ass_karaoke, burn_subtitles
+from .style import resolve_editing_config
 
 
 def run(input_path: str, config_path: str) -> None:
@@ -23,10 +26,10 @@ def run(input_path: str, config_path: str) -> None:
     output_dir = cfg.get("output_dir", "./output")
     os.makedirs(output_dir, exist_ok=True)
 
-    print(f"[1/4] Transcribing {input_path} ...")
+    print(f"[1/5] Transcribing {input_path} ...")
     segments = transcribe(input_path)
 
-    print("[2/4] Scoring highlight candidates ...")
+    print("[2/5] Scoring highlight candidates ...")
     clip_cfg = cfg["clipping"]
     highlights = find_highlights(
         segments,
@@ -37,40 +40,75 @@ def run(input_path: str, config_path: str) -> None:
     )
     print(f"  -> {len(highlights)} candidate clips selected")
 
-    manifest = []
     reframe_cfg = cfg.get("reframe", {})
     captions_cfg = cfg.get("captions", {})
     campaign_cfg = cfg.get("campaign", {})
+    editing_cfg = cfg.get("editing", {})
+
+    style = resolve_editing_config(editing_cfg, campaign_cfg.get("description", ""))
+    print(
+        f"  -> editing style: jump_cuts={style.jump_cuts}, kenburns={style.kenburns}, "
+        f"captions={style.caption_style}"
+    )
+
+    manifest = []
+    reframe_width = reframe_cfg.get("width", 1080)
+    reframe_height = reframe_cfg.get("height", 1920)
 
     for idx, h in enumerate(highlights, start=1):
-        print(f"[3/4] Rendering clip {idx}/{len(highlights)} ({h.start:.1f}s-{h.end:.1f}s) ...")
+        print(f"[3/5] Rendering clip {idx}/{len(highlights)} ({h.start:.1f}s-{h.end:.1f}s) ...")
         base = os.path.join(output_dir, f"clip_{idx:02d}")
         raw_path = f"{base}_raw.mp4"
+        jumpcut_path = f"{base}_jumpcut.mp4"
         vertical_path = f"{base}_vertical.mp4"
-        srt_path = f"{base}.srt"
+        zoomed_path = f"{base}_zoomed.mp4"
+        subtitle_path = f"{base}.ass" if style.caption_style == "karaoke" else f"{base}.srt"
         final_path = f"{base}_final.mp4"
 
+        clip_duration = h.end - h.start
         cut_clip(input_path, h.start, h.end, raw_path)
-        reframe_vertical(
-            raw_path, vertical_path,
-            mode=reframe_cfg.get("mode", "blur-bg"),
-            width=reframe_cfg.get("width", 1080),
-            height=reframe_cfg.get("height", 1920),
-        )
+
+        if style.jump_cuts:
+            print(f"    [jump cuts] detecting dead air ...")
+            silences = detect_silences(raw_path, min_duration=style.silence_min_duration)
+            keep_segments = compute_keep_segments(clip_duration, silences)
+            apply_jump_cuts(raw_path, jumpcut_path, keep_segments)
+            removed = clip_duration - sum(e - s for s, e in keep_segments)
+            print(f"    [jump cuts] removed {removed:.1f}s of dead air across {len(keep_segments)} segments")
+        else:
+            jumpcut_path = raw_path
+            keep_segments = [(0.0, clip_duration)]
+
+        reframe_vertical(jumpcut_path, vertical_path, mode=reframe_cfg.get("mode", "blur-bg"), width=reframe_width, height=reframe_height)
+
+        if style.kenburns:
+            apply_kenburns(vertical_path, zoomed_path, width=reframe_width, height=reframe_height)
+        else:
+            zoomed_path = vertical_path
 
         if captions_cfg.get("enabled", True):
-            build_srt(
-                segments, h.start, h.end, srt_path,
-                max_words_per_line=captions_cfg.get("max_words_per_line", 4),
-            )
-            burn_captions(
-                vertical_path, srt_path, final_path,
-                font=captions_cfg.get("font", "Arial"),
-                font_size=captions_cfg.get("font_size", 46),
-                position=captions_cfg.get("position", "bottom"),
-            )
+            words = extract_words(segments, h.start, h.end)
+            words = [
+                (remap_timestamp(s, keep_segments), remap_timestamp(e, keep_segments), t)
+                for s, e, t in words
+            ]
+            words = [(s, e, t) for s, e, t in words if e > s]
+
+            font = captions_cfg.get("font", "Arial")
+            font_size = captions_cfg.get("font_size", 46)
+            max_words = captions_cfg.get("max_words_per_line", 4)
+            position = captions_cfg.get("position", "bottom")
+
+            if style.caption_style == "karaoke":
+                build_ass_karaoke(words, subtitle_path, font=font, font_size=font_size, max_words_per_line=max_words, position=position)
+                burn_subtitles(zoomed_path, subtitle_path, final_path)
+            else:
+                build_srt(words, subtitle_path, max_words_per_line=max_words)
+                alignment = 2 if position == "bottom" else 5
+                force_style = f"FontName={font},FontSize={font_size},Alignment={alignment},Outline=3,Bold=1,MarginV=80,MarginL=60,MarginR=60"
+                burn_subtitles(zoomed_path, subtitle_path, final_path, force_style=force_style)
         else:
-            os.replace(vertical_path, final_path)
+            os.replace(zoomed_path, final_path)
 
         hashtags = " ".join(campaign_cfg.get("hashtags", []))
         title = h.text[:80].strip()
@@ -83,13 +121,18 @@ def run(input_path: str, config_path: str) -> None:
             "score": h.score,
             "transcript": h.text,
             "suggested_caption": caption,
+            "editing_style": {
+                "jump_cuts": style.jump_cuts,
+                "kenburns": style.kenburns,
+                "caption_style": style.caption_style,
+            },
         })
 
     manifest_path = os.path.join(output_dir, "manifest.json")
     with open(manifest_path, "w") as f:
         json.dump(manifest, f, indent=2)
 
-    print(f"[4/4] Done. {len(manifest)} clips ready for review in {output_dir}")
+    print(f"[5/5] Done. {len(manifest)} clips ready for review in {output_dir}")
     print(f"       Manifest: {manifest_path}")
     print("       Review each clip before posting -- nothing is auto-posted by this pipeline.")
 
