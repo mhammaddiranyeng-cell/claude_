@@ -58,3 +58,13 @@ def publish_reel(video_url: str, caption: str, poll_interval: float = 5.0, timeo
     )
     publish_resp.raise_for_status()
     return publish_resp.json()["id"]
+
+
+def get_permalink(media_id: str) -> str:
+    access_token = os.environ["IG_ACCESS_TOKEN"]
+    resp = requests.get(
+        f"{API_BASE}/{media_id}",
+        params={"fields": "permalink", "access_token": access_token},
+    )
+    resp.raise_for_status()
+    return resp.json()["permalink"]
