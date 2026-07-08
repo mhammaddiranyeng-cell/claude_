@@ -5,6 +5,7 @@ Usage:
 """
 import argparse
 import json
+import math
 import os
 
 import yaml
@@ -17,6 +18,7 @@ from .reframe import reframe_vertical
 from .zoom import apply_kenburns
 from .captions import extract_words, build_srt, build_ass_karaoke, burn_subtitles
 from .style import resolve_editing_config
+from .probe import probe_duration_seconds
 
 
 def run(input_path: str, config_path: str) -> None:
@@ -31,12 +33,21 @@ def run(input_path: str, config_path: str) -> None:
 
     print("[2/5] Scoring highlight candidates ...")
     clip_cfg = cfg["clipping"]
+
+    max_clips_cfg = clip_cfg.get("max_clips_per_video", "auto")
+    if max_clips_cfg == "auto":
+        duration = probe_duration_seconds(input_path)
+        max_clips = max(1, math.floor(duration / 60))
+        print(f"  -> source is {duration / 60:.1f} min, auto-targeting {max_clips} clip(s)")
+    else:
+        max_clips = int(max_clips_cfg)
+
     highlights = find_highlights(
         segments,
         trigger_phrases=clip_cfg.get("trigger_phrases", []),
         min_clip_seconds=clip_cfg.get("min_clip_seconds", 20),
         max_clip_seconds=clip_cfg.get("max_clip_seconds", 90),
-        max_clips=clip_cfg.get("max_clips_per_video", 8),
+        max_clips=max_clips,
     )
     print(f"  -> {len(highlights)} candidate clips selected")
 

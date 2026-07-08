@@ -11,7 +11,10 @@ campaign:
 clipping:
   min_clip_seconds: 20
   max_clip_seconds: 90
-  max_clips_per_video: 8
+  # "auto" = 1 clip per minute of source video, minimum 1 (e.g. a 90s clip
+  # of source video still makes just 1, a 60min video makes up to 60).
+  # Set a number instead to pin an exact count regardless of length.
+  max_clips_per_video: "auto"
   # Words/phrases that bump a segment's highlight score (case-insensitive).
   # Tune this per niche/creator.
   trigger_phrases:
