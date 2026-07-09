@@ -9,19 +9,59 @@ Setup (one-time, you do this yourself at developers.tiktok.com):
      posting requires passing their app review -- there is no way around
      this from our side, it's enforced server-side by TikTok.
 
+Access tokens expire in 24h; the refresh token lasts ~365 days. Every
+call here refreshes first automatically, so you never need to re-run
+tiktok_auth_helper.py just because time passed.
+
 Docs: https://developers.tiktok.com/doc/content-posting-api-reference-direct-post
 """
 import os
 
 import requests
+from dotenv import find_dotenv, set_key
 
 API_BASE = "https://open.tiktokapis.com/v2"
+TOKEN_URL = f"{API_BASE}/oauth/token/"
 CHUNK_SIZE = 10 * 1024 * 1024  # 10MB, within TikTok's allowed chunk range
+
+
+def _refresh_access_token() -> str:
+    client_key = os.environ["TIKTOK_CLIENT_KEY"]
+    client_secret = os.environ["TIKTOK_CLIENT_SECRET"]
+    refresh_token = os.environ["TIKTOK_REFRESH_TOKEN"]
+
+    resp = requests.post(
+        TOKEN_URL,
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+        data={
+            "client_key": client_key,
+            "client_secret": client_secret,
+            "grant_type": "refresh_token",
+            "refresh_token": refresh_token,
+        },
+    )
+    data = resp.json() if resp.content else {}
+    if not resp.ok or "access_token" not in data:
+        raise RuntimeError(f"TikTok token refresh failed (HTTP {resp.status_code}): {data}")
+
+    access_token = data["access_token"]
+    new_refresh_token = data.get("refresh_token", refresh_token)
+
+    # TikTok rotates the refresh token on each use -- persist both back to
+    # .env so the next run (even days later) has a valid one to start from.
+    dotenv_path = find_dotenv()
+    if dotenv_path:
+        set_key(dotenv_path, "TIKTOK_ACCESS_TOKEN", access_token)
+        set_key(dotenv_path, "TIKTOK_REFRESH_TOKEN", new_refresh_token)
+    os.environ["TIKTOK_ACCESS_TOKEN"] = access_token
+    os.environ["TIKTOK_REFRESH_TOKEN"] = new_refresh_token
+
+    return access_token
 
 
 def upload_video(video_path: str, title: str, privacy_level: str = "SELF_ONLY") -> str:
     """Initiates + uploads a direct post. Returns the publish_id to poll for status."""
-    access_token = os.environ["TIKTOK_ACCESS_TOKEN"]
+    access_token = _refresh_access_token()
     headers = {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}
 
     video_size = os.path.getsize(video_path)
@@ -66,7 +106,7 @@ def upload_video(video_path: str, title: str, privacy_level: str = "SELF_ONLY") 
 
 
 def check_status(publish_id: str) -> dict:
-    access_token = os.environ["TIKTOK_ACCESS_TOKEN"]
+    access_token = _refresh_access_token()
     headers = {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}
     resp = requests.post(
         f"{API_BASE}/post/publish/status/fetch/",
