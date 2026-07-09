@@ -56,10 +56,9 @@ def main() -> None:
             "code": code,
         },
     )
-    short_resp.raise_for_status()
-    short_data = short_resp.json()
-    if "access_token" not in short_data:
-        raise SystemExit(f"Short-lived token exchange failed: {short_data}")
+    short_data = short_resp.json() if short_resp.content else {}
+    if not short_resp.ok or "access_token" not in short_data:
+        raise SystemExit(f"Short-lived token exchange failed (HTTP {short_resp.status_code}): {short_data}")
 
     long_resp = requests.get(
         LONG_TOKEN_URL,
@@ -69,16 +68,16 @@ def main() -> None:
             "access_token": short_data["access_token"],
         },
     )
-    long_resp.raise_for_status()
-    long_data = long_resp.json()
-    if "access_token" not in long_data:
-        raise SystemExit(f"Long-lived token exchange failed: {long_data}")
+    long_data = long_resp.json() if long_resp.content else {}
+    if not long_resp.ok or "access_token" not in long_data:
+        raise SystemExit(f"Long-lived token exchange failed (HTTP {long_resp.status_code}): {long_data}")
 
     access_token = long_data["access_token"]
 
     me_resp = requests.get(ME_URL, params={"fields": "id,username", "access_token": access_token})
-    me_resp.raise_for_status()
-    me_data = me_resp.json()
+    me_data = me_resp.json() if me_resp.content else {}
+    if not me_resp.ok:
+        raise SystemExit(f"Lookup of your Instagram user ID failed (HTTP {me_resp.status_code}): {me_data}")
 
     print("\nSuccess. Add these to your local .env:\n")
     print(f"IG_ACCESS_TOKEN={access_token}")
