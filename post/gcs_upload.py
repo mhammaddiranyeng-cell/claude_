@@ -33,8 +33,11 @@ def upload_and_sign(local_path: str, expiration_hours: int = 24) -> str:
 
     blob_name = f"clips/{uuid.uuid4().hex}_{os.path.basename(local_path)}"
     blob = bucket.blob(blob_name)
-    # Default timeout is too short for a 50MB+ clip on an ordinary home
-    # upload speed; (connect, read) timeout, generous enough for slow links.
+    # A single continuous request for a 50MB+ file doesn't survive some
+    # networks (connection reset mid-transfer, unrelated to the timeout
+    # value). Setting chunk_size forces the resumable-upload protocol to
+    # split it into small requests, each retried independently on failure.
+    blob.chunk_size = 5 * 1024 * 1024  # 5MB
     blob.upload_from_filename(local_path, content_type="video/mp4", timeout=(30, 600))
 
     return blob.generate_signed_url(expiration=timedelta(hours=expiration_hours), version="v4")
