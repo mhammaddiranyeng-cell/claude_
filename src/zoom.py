@@ -10,8 +10,14 @@ def apply_kenburns(
     # Upscale first so zoompan has enough source resolution to crop from
     # without visible pixelation; pzoom carries the zoom level frame-to-frame
     # (plain "zoom" resets every frame when the input is video, not a still).
+    # The fps= filter *before* zoompan is required: zoompan was designed for
+    # single-image input and stretches the timeline (rather than resampling)
+    # when the input isn't already at the exact fps it's told to output --
+    # e.g. a 12fps source with fps=30 requested here doubles the output
+    # duration instead of just changing frame count, desyncing audio/video.
     vf = (
         f"scale={width * 4}:-2,"
+        f"fps={fps},"
         f"zoompan=z='min(pzoom+{rate},{max_zoom})':d=1:"
         f"x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={width}x{height}:fps={fps}"
     )
