@@ -4,49 +4,26 @@ Run this on your own machine (never in a remote/cloud session):
 
     python -m post.instagram_auth_helper
 
-It starts a tiny local server on http://localhost:8788/callback (must
-match the redirect URI registered in your app's "Instagram business
-login" settings), prints a URL for you to open and approve in your
-browser, exchanges the resulting code for a short-lived token, then
-exchanges that for a long-lived (~60 day) token and prints it along
-with your Instagram user ID for you to paste into your own .env.
+Instagram Business Login requires an HTTPS redirect URI (no plain
+http://localhost exception), so this routes through a static callback
+page hosted on GitHub Pages (docs/instagram_callback.html) instead of
+running a local server: it prints a URL for you to open and approve in
+your browser, that page displays the resulting code, and you paste it
+back here. Everything after that (token exchange, long-lived exchange,
+looking up your user ID) is automatic.
 """
-import http.server
-import json
 import os
-import threading
 import urllib.parse
-import webbrowser
 
 import requests
 from dotenv import load_dotenv
 
-REDIRECT_URI = "http://localhost:8788/callback"
+REDIRECT_URI = "https://mhammaddiranyeng-cell.github.io/claude_/instagram_callback.html"
 AUTHORIZE_URL = "https://www.instagram.com/oauth/authorize"
 SHORT_TOKEN_URL = "https://api.instagram.com/oauth/access_token"
 LONG_TOKEN_URL = "https://graph.instagram.com/access_token"
 ME_URL = "https://graph.instagram.com/me"
 SCOPE = "instagram_business_basic,instagram_business_content_publish"
-
-_result = {}
-
-
-class _CallbackHandler(http.server.BaseHTTPRequestHandler):
-    def do_GET(self):
-        parsed = urllib.parse.urlparse(self.path)
-        params = urllib.parse.parse_qs(parsed.query)
-        _result["code"] = params.get("code", [None])[0]
-        _result["error"] = params.get("error", [None])[0]
-
-        self.send_response(200)
-        self.send_header("Content-Type", "text/html")
-        self.end_headers()
-        body = "Done -- you can close this tab and go back to your terminal." \
-            if _result.get("code") else f"Error: {_result.get('error')}"
-        self.wfile.write(body.encode())
-
-    def log_message(self, *args):
-        pass
 
 
 def main() -> None:
@@ -62,21 +39,12 @@ def main() -> None:
     }
     auth_url = f"{AUTHORIZE_URL}?{urllib.parse.urlencode(auth_params)}"
 
-    server = http.server.HTTPServer(("localhost", 8788), _CallbackHandler)
-    thread = threading.Thread(target=server.handle_request)
-    thread.start()
-
-    print("Opening your browser to approve access. If it doesn't open automatically, visit:\n")
+    print("Open this URL, log in, and approve access:\n")
     print(auth_url, "\n")
-    webbrowser.open(auth_url)
-
-    thread.join(timeout=300)
-    server.server_close()
-
-    if _result.get("error"):
-        raise SystemExit(f"Instagram returned an error: {_result['error']}")
-    if not _result.get("code"):
-        raise SystemExit("Timed out waiting for the browser approval. Try again.")
+    print("You'll land on a page showing a code -- copy it and paste it below.")
+    code = input("Code: ").strip()
+    # Instagram sometimes appends a "#_" fragment to the code; strip it if present.
+    code = code.split("#")[0]
 
     short_resp = requests.post(
         SHORT_TOKEN_URL,
@@ -85,7 +53,7 @@ def main() -> None:
             "client_secret": app_secret,
             "grant_type": "authorization_code",
             "redirect_uri": REDIRECT_URI,
-            "code": _result["code"],
+            "code": code,
         },
     )
     short_resp.raise_for_status()

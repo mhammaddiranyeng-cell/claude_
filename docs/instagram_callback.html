@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Instagram login callback</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  body { font-family: -apple-system, Helvetica, Arial, sans-serif; max-width: 640px; margin: 60px auto; padding: 0 20px; line-height: 1.6; color: #222; }
+  code { background: #f0f0f0; padding: 12px; display: block; word-break: break-all; border-radius: 6px; font-size: 1.1em; }
+</style>
+</head>
+<body>
+<h1>Instagram login complete</h1>
+<p>Copy the code below and paste it back into your terminal:</p>
+<code id="code">(reading...)</code>
+<script>
+  const params = new URLSearchParams(window.location.search);
+  const code = params.get("code");
+  document.getElementById("code").textContent = code || "No code found in URL -- check for an 'error' param instead: " + window.location.search;
+</script>
+</body>
+</html>
