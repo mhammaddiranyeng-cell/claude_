@@ -17,7 +17,7 @@ import time
 from dotenv import load_dotenv
 from googleapiclient.errors import HttpError
 
-from . import youtube_post, tiktok_post, instagram_post, gcs_upload
+from . import youtube_post, tiktok_post, instagram_post, ngrok_tunnel
 
 
 def post_one(clip: dict, platforms: list, public: bool, instagram_video_url: str = None) -> list:
@@ -41,11 +41,12 @@ def post_one(clip: dict, platforms: list, public: bool, instagram_video_url: str
         results.append(("tiktok", note))
 
     if "instagram" in platforms:
-        video_url = instagram_video_url
-        if not video_url:
-            print("  Instagram: uploading clip to Google Cloud Storage for a temporary public URL ...")
-            video_url = gcs_upload.upload_and_sign(clip["clip"])
-        media_id = instagram_post.publish_reel(video_url, caption=clip["suggested_caption"])
+        if instagram_video_url:
+            media_id = instagram_post.publish_reel(instagram_video_url, caption=clip["suggested_caption"])
+        else:
+            print("  Instagram: opening a temporary tunnel so Instagram can fetch the clip ...")
+            with ngrok_tunnel.serve_clip_publicly(clip["clip"]) as video_url:
+                media_id = instagram_post.publish_reel(video_url, caption=clip["suggested_caption"])
         permalink = instagram_post.get_permalink(media_id)
         print(f"  Instagram: published, {permalink}")
         results.append(("instagram", permalink))
@@ -62,7 +63,7 @@ def main() -> None:
     parser.add_argument("--all", action="store_true", help="Post every clip in the manifest.")
     parser.add_argument("--platforms", required=True, help="Comma-separated: youtube,tiktok,instagram")
     parser.add_argument("--public", action="store_true", help="Upload YouTube videos as public directly instead of private-for-review.")
-    parser.add_argument("--instagram-video-url", help="Override: use this exact public URL instead of auto-uploading each clip to GCS (only makes sense with a single clip, not --all).")
+    parser.add_argument("--instagram-video-url", help="Override: use this exact public URL instead of tunneling each clip via ngrok (only makes sense with a single clip, not --all).")
     parser.add_argument("--delay", type=float, default=5.0, help="Seconds to wait between clips with --all.")
     args = parser.parse_args()
 
