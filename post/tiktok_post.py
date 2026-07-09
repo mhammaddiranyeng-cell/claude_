@@ -65,7 +65,16 @@ def upload_video(video_path: str, title: str, privacy_level: str = "SELF_ONLY") 
     headers = {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}
 
     video_size = os.path.getsize(video_path)
-    total_chunks = max(1, (video_size + CHUNK_SIZE - 1) // CHUNK_SIZE)
+
+    # TikTok's rule: total_chunk_count = video_size // chunk_size (floor),
+    # and the LAST chunk absorbs all remaining bytes (can exceed chunk_size,
+    # up to 128MB) rather than trailing off as its own small final chunk.
+    if video_size < 5 * 1024 * 1024:
+        chunk_size = video_size
+        total_chunks = 1
+    else:
+        chunk_size = CHUNK_SIZE
+        total_chunks = max(1, video_size // chunk_size)
 
     init_body = {
         "post_info": {
@@ -78,7 +87,7 @@ def upload_video(video_path: str, title: str, privacy_level: str = "SELF_ONLY") 
         "source_info": {
             "source": "FILE_UPLOAD",
             "video_size": video_size,
-            "chunk_size": min(CHUNK_SIZE, video_size),
+            "chunk_size": chunk_size,
             "total_chunk_count": total_chunks,
         },
     }
@@ -91,9 +100,9 @@ def upload_video(video_path: str, title: str, privacy_level: str = "SELF_ONLY") 
 
     with open(video_path, "rb") as f:
         offset = 0
-        chunk_index = 0
-        while offset < video_size:
-            chunk = f.read(CHUNK_SIZE)
+        for i in range(total_chunks):
+            is_last = i == total_chunks - 1
+            chunk = f.read() if is_last else f.read(chunk_size)
             chunk_end = offset + len(chunk) - 1
             put_headers = {
                 "Content-Range": f"bytes {offset}-{chunk_end}/{video_size}",
@@ -103,7 +112,6 @@ def upload_video(video_path: str, title: str, privacy_level: str = "SELF_ONLY") 
             if not put_resp.ok:
                 raise RuntimeError(f"TikTok chunk upload failed (HTTP {put_resp.status_code}): {put_resp.text}")
             offset += len(chunk)
-            chunk_index += 1
 
     return publish_id
 
