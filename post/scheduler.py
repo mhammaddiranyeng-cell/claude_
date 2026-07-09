@@ -17,7 +17,7 @@ import time
 from dotenv import load_dotenv
 from googleapiclient.errors import HttpError
 
-from . import youtube_post, tiktok_post, instagram_post
+from . import youtube_post, tiktok_post, instagram_post, gcs_upload
 
 
 def post_one(clip: dict, platforms: list, public: bool, instagram_video_url: str = None) -> list:
@@ -41,9 +41,11 @@ def post_one(clip: dict, platforms: list, public: bool, instagram_video_url: str
         results.append(("tiktok", note))
 
     if "instagram" in platforms:
-        if not instagram_video_url:
-            raise SystemExit("--instagram-video-url is required to post to Instagram (Graph API needs a public URL).")
-        media_id = instagram_post.publish_reel(instagram_video_url, caption=clip["suggested_caption"])
+        video_url = instagram_video_url
+        if not video_url:
+            print("  Instagram: uploading clip to Google Cloud Storage for a temporary public URL ...")
+            video_url = gcs_upload.upload_and_sign(clip["clip"])
+        media_id = instagram_post.publish_reel(video_url, caption=clip["suggested_caption"])
         permalink = instagram_post.get_permalink(media_id)
         print(f"  Instagram: published, {permalink}")
         results.append(("instagram", permalink))
@@ -60,7 +62,7 @@ def main() -> None:
     parser.add_argument("--all", action="store_true", help="Post every clip in the manifest.")
     parser.add_argument("--platforms", required=True, help="Comma-separated: youtube,tiktok,instagram")
     parser.add_argument("--public", action="store_true", help="Upload YouTube videos as public directly instead of private-for-review.")
-    parser.add_argument("--instagram-video-url", help="Public URL for the clip (required if posting to instagram; same URL used for every clip with --all, which only makes sense for a single clip).")
+    parser.add_argument("--instagram-video-url", help="Override: use this exact public URL instead of auto-uploading each clip to GCS (only makes sense with a single clip, not --all).")
     parser.add_argument("--delay", type=float, default=5.0, help="Seconds to wait between clips with --all.")
     args = parser.parse_args()
 
