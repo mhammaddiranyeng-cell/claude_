@@ -20,7 +20,7 @@ import requests
 from dotenv import load_dotenv
 
 REDIRECT_URI = "https://mhammaddiranyeng-cell.github.io/claude_/instagram_callback.html"
-AUTHORIZE_URL = "https://www.instagram.com/oauth/authorize"
+AUTHORIZE_URL = "https://api.instagram.com/oauth/authorize"
 SHORT_TOKEN_URL = "https://api.instagram.com/oauth/access_token"
 LONG_TOKEN_URL = "https://graph.instagram.com/access_token"
 ME_URL = "https://graph.instagram.com/me"
