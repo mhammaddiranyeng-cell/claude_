@@ -23,12 +23,24 @@ they go out.
 import argparse
 import json
 import os
+import re
 import shlex
 
 from dotenv import load_dotenv
 
 from .pipeline import run as run_pipeline
 from post.scheduler import post_one
+
+
+def _slugify(name: str) -> str:
+    """Filesystem- and ffmpeg-filter-safe folder name. ffmpeg's -vf
+    subtitles= filter parses its path argument for syntax characters
+    (', ,, :) rather than treating them as literal -- a stray apostrophe
+    or comma in a source video's filename (e.g. "100 Children's Hearts.mp4")
+    silently mangles the path instead of erroring clearly, so this strips
+    anything but alphanumerics/space/hyphen up front."""
+    safe = re.sub(r"[^A-Za-z0-9 _-]", "", name)
+    return re.sub(r"\s+", "_", safe).strip("_") or "clip"
 
 
 def _post_manifest(manifest_path: str, platforms: list, public: bool) -> None:
@@ -78,9 +90,12 @@ def main() -> None:
 
     for vi, video_path in enumerate(video_paths, start=1):
         print(f"\n=== [{vi}/{len(video_paths)}] {video_path} ===")
-        subdir = os.path.splitext(os.path.basename(video_path))[0]
-        manifest_path = run_pipeline(video_path, args.config, description_override=description or None, output_subdir=subdir)
-        _post_manifest(manifest_path, platforms, public=not args.private)
+        subdir = _slugify(os.path.splitext(os.path.basename(video_path))[0])
+        try:
+            manifest_path = run_pipeline(video_path, args.config, description_override=description or None, output_subdir=subdir)
+            _post_manifest(manifest_path, platforms, public=not args.private)
+        except Exception as e:
+            print(f"  Failed on this video, skipping to the next one: {e}")
 
     print(f"\nDone with all {len(video_paths)} video(s).")
 
