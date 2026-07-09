@@ -16,7 +16,7 @@ from .clipper import cut_clip
 from .jumpcuts import detect_silences, compute_keep_segments, apply_jump_cuts, remap_timestamp
 from .reframe import reframe_vertical
 from .zoom import apply_kenburns
-from .captions import extract_words, build_srt, build_ass_karaoke, burn_subtitles
+from .captions import extract_words, build_srt, build_ass_karaoke, build_hook_ass, burn_subtitles
 from .style import resolve_editing_config
 from .probe import probe_duration_seconds
 
@@ -96,7 +96,10 @@ def run(input_path: str, config_path: str, description_override: str = None) -> 
         reframe_vertical(jumpcut_path, vertical_path, mode=reframe_cfg.get("mode", "blur-bg"), width=reframe_width, height=reframe_height)
 
         if style.kenburns:
-            apply_kenburns(vertical_path, zoomed_path, width=reframe_width, height=reframe_height)
+            # Cycle the pan anchor across clips so a batch from the same
+            # source doesn't all zoom toward the exact same point.
+            anchor = ["center", "top", "bottom"][(idx - 1) % 3]
+            apply_kenburns(vertical_path, zoomed_path, width=reframe_width, height=reframe_height, anchor=anchor)
         else:
             zoomed_path = vertical_path
 
@@ -119,13 +122,24 @@ def run(input_path: str, config_path: str, description_override: str = None) -> 
             else:
                 build_srt(words, subtitle_path, max_words_per_line=max_words)
                 alignment = 2 if position == "bottom" else 5
-                force_style = f"FontName={font},FontSize={font_size},Alignment={alignment},Outline=3,Bold=1,MarginV=80,MarginL=60,MarginR=60"
+                force_style = (
+                    f"FontName={font},FontSize={font_size},Alignment={alignment},Bold=1,"
+                    f"BorderStyle=3,Outline=6,Shadow=0,BackColour=&H90000000&,"
+                    f"MarginV=80,MarginL=60,MarginR=60"
+                )
                 burn_subtitles(zoomed_path, subtitle_path, final_path, force_style=force_style)
         else:
             os.replace(zoomed_path, final_path)
 
-        hashtags = " ".join(campaign_cfg.get("hashtags", []))
         title = h.text[:80].strip()
+        if captions_cfg.get("hook_enabled", True):
+            hook_path = f"{base}_hook.ass"
+            hooked_path = f"{base}_hooked.mp4"
+            build_hook_ass(title[:60], hook_path)
+            burn_subtitles(final_path, hook_path, hooked_path)
+            os.replace(hooked_path, final_path)
+
+        hashtags = " ".join(campaign_cfg.get("hashtags", []))
         caption = campaign_cfg.get("caption_template", "{title} {hashtags}").format(title=title, hashtags=hashtags)
 
         manifest.append({

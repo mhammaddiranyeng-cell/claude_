@@ -44,5 +44,6 @@ captions:
   font_size: 34
   max_words_per_line: 4
   position: "bottom"   # "bottom" | "center"
+  hook_enabled: true   # bold title-card line at the top for the clip's first ~1.6s
 
 output_dir: "./output"

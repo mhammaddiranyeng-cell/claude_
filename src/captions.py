@@ -55,6 +55,7 @@ def build_ass_karaoke(
     words: List[WordEntry], ass_path: str,
     font: str = "Arial", font_size: int = 34, max_words_per_line: int = 4,
     highlight_color: str = "&H0000FFFF",  # ASS is BGR: this is yellow
+    box_color: str = "&H90000000",  # semi-transparent black backing box, for legibility over busy footage
     position: str = "bottom",
 ) -> None:
     alignment = 2 if position == "bottom" else 5
@@ -66,7 +67,7 @@ WrapStyle: 2
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Default,{font},{font_size},{highlight_color},&H00FFFFFF,&H00000000,&H00000000,1,0,0,0,100,100,0,0,1,3,0,{alignment},60,60,80,1
+Style: Default,{font},{font_size},{highlight_color},&H00FFFFFF,&H00000000,{box_color},1,0,0,0,100,100,0,0,3,6,0,{alignment},60,60,80,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -77,9 +78,24 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         if not chunk:
             continue
         line_start, line_end = chunk[0][0], chunk[-1][1]
-        karaoke_text = "".join(
-            f"{{\\k{max(int(round((we - ws) * 100)), 1)}}}{wtext} " for ws, we, wtext in chunk
-        )
+        # Each word gets a quick scale "pop" timed to when it becomes the
+        # active (karaoke-highlighted) word, on top of the existing \k fill --
+        # \t offsets are ms from this Dialogue's own start, so they're built
+        # from a running centisecond cursor rather than absolute clip time.
+        parts = []
+        cursor_cs = 0
+        for ws, we, wtext in chunk:
+            dur_cs = max(int(round((we - ws) * 100)), 1)
+            pop_start_ms = cursor_cs * 10
+            pop_mid_ms = pop_start_ms + 70
+            pop_end_ms = pop_start_ms + 140
+            parts.append(
+                f"{{\\k{dur_cs}"
+                f"\\t({pop_start_ms},{pop_mid_ms},\\fscx116\\fscy116)"
+                f"\\t({pop_mid_ms},{pop_end_ms},\\fscx100\\fscy100)}}{wtext} "
+            )
+            cursor_cs += dur_cs
+        karaoke_text = "".join(parts)
         lines.append(
             f"Dialogue: 0,{_fmt_ass_ts(line_start)},{_fmt_ass_ts(line_end)},Default,,0,0,0,,{karaoke_text.strip()}"
         )
@@ -87,6 +103,32 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     with open(ass_path, "w", encoding="utf-8") as f:
         f.write(header)
         f.write("\n".join(lines) + "\n")
+
+
+def build_hook_ass(text: str, ass_path: str, duration: float = 1.6, font: str = "Arial", font_size: int = 56) -> None:
+    """A short bold title-card line pinned to the top of the frame for the
+    first `duration` seconds of a clip -- a "hook" to give viewers a reason
+    to keep watching before the spoken captions catch up. Kept as its own
+    ASS file/style (rather than folded into build_ass_karaoke) so it burns
+    in as a separate pass regardless of which caption style (karaoke/line)
+    the clip otherwise uses.
+    """
+    header = f"""[Script Info]
+ScriptType: v4.00+
+PlayResX: 1080
+PlayResY: 1920
+WrapStyle: 1
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Hook,{font},{font_size},&H00FFFFFF,&H00FFFFFF,&H00000000,&H90000000,1,0,0,0,100,100,0,0,3,8,0,8,60,60,120,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,{_fmt_ass_ts(0)},{_fmt_ass_ts(duration)},Hook,,0,0,0,,{{\\fad(150,200)}}{text}
+"""
+    with open(ass_path, "w", encoding="utf-8") as f:
+        f.write(header)
 
 
 def burn_subtitles(in_path: str, subtitle_path: str, out_path: str, force_style: str = None) -> None:
