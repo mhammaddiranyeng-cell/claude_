@@ -69,11 +69,21 @@ them for you — but here's exactly what each one needs:
 
 **Instagram (Reels)**
 1. Your IG account needs to be a Business or Creator account.
-2. Create a Meta app at [developers.facebook.com](https://developers.facebook.com), add Instagram Graph API.
-3. Get a long-lived access token with `instagram_content_publish` + your IG Business Account ID.
-4. Graph API fetches the video from a **public URL** you provide — it doesn't accept
-   direct file uploads. You'll need to host the rendered clip somewhere reachable
-   (a private S3/GCS bucket with a signed URL works fine) before calling `publish_reel`.
+2. Create a Meta app at [developers.facebook.com](https://developers.facebook.com), add the
+   **"Instagram API"** product (the Instagram-Login-based one — pick "API setup with
+   Instagram login" if there's a choice, not the Facebook-Page-based variant).
+3. Under that product's **Roles** tab, add yourself as an **Instagram Tester**, then accept
+   the invite from inside the Instagram app itself (Settings → Apps and websites).
+4. Under **Permissions and features**, confirm `instagram_business_content_publish` is
+   enabled (usually "Ready for testing" with no app review needed for tester accounts).
+5. Register `http://localhost:8788/callback` as the redirect URI under
+   "Set up Instagram business login" in the app dashboard.
+6. Put `IG_APP_ID` and `IG_APP_SECRET` in `.env`, then run
+   `python -m post.instagram_auth_helper` to get `IG_ACCESS_TOKEN` and `IG_USER_ID`.
+7. This API fetches the video from a **public URL**, not a direct upload — `scheduler.py`
+   handles this automatically via a temporary `ngrok` tunnel (`post/ngrok_tunnel.py`;
+   needs a free `NGROK_AUTHTOKEN` in `.env`, no credit card required). A GCS-based
+   alternative (`post/gcs_upload.py`) exists if you'd rather host clips yourself.
 
 ### 3. Posting
 
