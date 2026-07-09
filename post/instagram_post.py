@@ -52,13 +52,14 @@ def publish_reel(video_url: str, caption: str, poll_interval: float = 5.0, timeo
     while time.monotonic() < deadline:
         status_resp = requests.get(
             f"{API_BASE}/{creation_id}",
-            params={"fields": "status_code", "access_token": access_token},
+            params={"fields": "status_code,status", "access_token": access_token},
         )
-        status_code = _check(status_resp).get("status_code")
+        status_data = _check(status_resp)
+        status_code = status_data.get("status_code")
         if status_code == "FINISHED":
             break
         if status_code == "ERROR":
-            raise RuntimeError(f"Instagram failed to process container {creation_id}")
+            raise RuntimeError(f"Instagram failed to process container {creation_id}: {status_data}")
         time.sleep(poll_interval)
     else:
         raise TimeoutError(f"Instagram container {creation_id} did not finish processing in time")
