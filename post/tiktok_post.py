@@ -9,6 +9,13 @@ Setup (one-time, you do this yourself at developers.tiktok.com):
      posting requires passing their app review -- there is no way around
      this from our side, it's enforced server-side by TikTok.
 
+Rather than hardcoding "SELF_ONLY" and needing a code change the day the
+audit passes, upload_video() asks TikTok itself (creator_info/query) which
+privacy levels the account is currently allowed to post with, and picks the
+most public one available. Pre-audit that'll resolve to SELF_ONLY; the same
+day TikTok approves the app, it starts resolving to PUBLIC_TO_EVERYONE with
+no changes needed here.
+
 Access tokens expire in 24h; the refresh token lasts ~365 days. Every
 call here refreshes first automatically, so you never need to re-run
 tiktok_auth_helper.py just because time passed.
@@ -23,6 +30,9 @@ from dotenv import find_dotenv, set_key
 API_BASE = "https://open.tiktokapis.com/v2"
 TOKEN_URL = f"{API_BASE}/oauth/token/"
 CHUNK_SIZE = 10 * 1024 * 1024  # 10MB, within TikTok's allowed chunk range
+
+# Most-public-first; used to pick the best option creator_info/query allows.
+_PRIVACY_PREFERENCE = ["PUBLIC_TO_EVERYONE", "MUTUAL_FOLLOW_FRIENDS", "FOLLOWER_OF_CREATOR", "SELF_ONLY"]
 
 
 def _refresh_access_token() -> str:
@@ -59,10 +69,44 @@ def _refresh_access_token() -> str:
     return access_token
 
 
-def upload_video(video_path: str, title: str, privacy_level: str = "SELF_ONLY") -> str:
-    """Initiates + uploads a direct post. Returns the publish_id to poll for status."""
+def get_creator_info(access_token: str) -> dict:
+    """Returns TikTok's current rules for this account: allowed privacy
+    levels, max duration, disabled interactions, etc. This can change
+    (e.g. the day an app review is approved), so it's queried fresh on
+    every upload rather than assumed."""
+    resp = requests.post(
+        f"{API_BASE}/post/publish/creator_info/query/",
+        headers={"Authorization": f"Bearer {access_token}", "Content-Type": "application/json; charset=UTF-8"},
+        json={},
+    )
+    data = resp.json() if resp.content else {}
+    if not resp.ok or "data" not in data:
+        raise RuntimeError(f"TikTok creator_info query failed (HTTP {resp.status_code}): {data}")
+    return data["data"]
+
+
+def _pick_privacy_level(options: list) -> str:
+    for level in _PRIVACY_PREFERENCE:
+        if level in options:
+            return level
+    return options[0] if options else "SELF_ONLY"
+
+
+def upload_video(video_path: str, title: str, privacy_level: str = None) -> str:
+    """Initiates + uploads a direct post. Returns the publish_id to poll for status.
+
+    If privacy_level isn't given, it's auto-picked from whatever TikTok's
+    creator_info/query says this account can currently post with (the most
+    public option available) -- see module docstring.
+    """
     access_token = _refresh_access_token()
     headers = {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}
+
+    if privacy_level is None:
+        creator_info = get_creator_info(access_token)
+        options = creator_info.get("privacy_level_options", ["SELF_ONLY"])
+        privacy_level = _pick_privacy_level(options)
+        print(f"  TikTok: posting with privacy_level={privacy_level} (account's current options: {options})")
 
     video_size = os.path.getsize(video_path)
 
