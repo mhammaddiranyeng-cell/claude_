@@ -33,6 +33,8 @@ def upload_and_sign(local_path: str, expiration_hours: int = 24) -> str:
 
     blob_name = f"clips/{uuid.uuid4().hex}_{os.path.basename(local_path)}"
     blob = bucket.blob(blob_name)
-    blob.upload_from_filename(local_path, content_type="video/mp4")
+    # Default timeout is too short for a 50MB+ clip on an ordinary home
+    # upload speed; (connect, read) timeout, generous enough for slow links.
+    blob.upload_from_filename(local_path, content_type="video/mp4", timeout=(30, 600))
 
     return blob.generate_signed_url(expiration=timedelta(hours=expiration_hours), version="v4")
