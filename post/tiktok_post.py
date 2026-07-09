@@ -83,8 +83,10 @@ def upload_video(video_path: str, title: str, privacy_level: str = "SELF_ONLY") 
         },
     }
     resp = requests.post(f"{API_BASE}/post/publish/video/init/", headers=headers, json=init_body)
-    resp.raise_for_status()
-    data = resp.json()["data"]
+    resp_data = resp.json() if resp.content else {}
+    if not resp.ok or "data" not in resp_data:
+        raise RuntimeError(f"TikTok init failed (HTTP {resp.status_code}): {resp_data}")
+    data = resp_data["data"]
     publish_id, upload_url = data["publish_id"], data["upload_url"]
 
     with open(video_path, "rb") as f:
@@ -98,7 +100,8 @@ def upload_video(video_path: str, title: str, privacy_level: str = "SELF_ONLY") 
                 "Content-Type": "video/mp4",
             }
             put_resp = requests.put(upload_url, headers=put_headers, data=chunk)
-            put_resp.raise_for_status()
+            if not put_resp.ok:
+                raise RuntimeError(f"TikTok chunk upload failed (HTTP {put_resp.status_code}): {put_resp.text}")
             offset += len(chunk)
             chunk_index += 1
 
@@ -113,5 +116,7 @@ def check_status(publish_id: str) -> dict:
         headers=headers,
         json={"publish_id": publish_id},
     )
-    resp.raise_for_status()
-    return resp.json()["data"]
+    resp_data = resp.json() if resp.content else {}
+    if not resp.ok or "data" not in resp_data:
+        raise RuntimeError(f"TikTok status check failed (HTTP {resp.status_code}): {resp_data}")
+    return resp_data["data"]
