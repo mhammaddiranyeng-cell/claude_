@@ -53,7 +53,7 @@ def _fmt_ass_ts(seconds: float) -> str:
 
 def build_ass_karaoke(
     words: List[WordEntry], ass_path: str,
-    font: str = "Arial", font_size: int = 46, max_words_per_line: int = 4,
+    font: str = "Arial", font_size: int = 34, max_words_per_line: int = 4,
     highlight_color: str = "&H0000FFFF",  # ASS is BGR: this is yellow
     position: str = "bottom",
 ) -> None:

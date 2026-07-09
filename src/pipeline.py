@@ -21,7 +21,8 @@ from .style import resolve_editing_config
 from .probe import probe_duration_seconds
 
 
-def run(input_path: str, config_path: str) -> None:
+def run(input_path: str, config_path: str, description_override: str = None) -> str:
+    """Returns the path to the written manifest.json."""
     with open(config_path) as f:
         cfg = yaml.safe_load(f)
 
@@ -54,6 +55,8 @@ def run(input_path: str, config_path: str) -> None:
     reframe_cfg = cfg.get("reframe", {})
     captions_cfg = cfg.get("captions", {})
     campaign_cfg = cfg.get("campaign", {})
+    if description_override:
+        campaign_cfg = {**campaign_cfg, "description": description_override}
     editing_cfg = cfg.get("editing", {})
 
     style = resolve_editing_config(editing_cfg, campaign_cfg.get("description", ""))
@@ -106,7 +109,7 @@ def run(input_path: str, config_path: str) -> None:
             words = [(s, e, t) for s, e, t in words if e > s]
 
             font = captions_cfg.get("font", "Arial")
-            font_size = captions_cfg.get("font_size", 46)
+            font_size = captions_cfg.get("font_size", 34)
             max_words = captions_cfg.get("max_words_per_line", 4)
             position = captions_cfg.get("position", "bottom")
 
@@ -146,6 +149,8 @@ def run(input_path: str, config_path: str) -> None:
     print(f"[5/5] Done. {len(manifest)} clips ready for review in {output_dir}")
     print(f"       Manifest: {manifest_path}")
     print("       Review each clip before posting -- nothing is auto-posted by this pipeline.")
+
+    return manifest_path
 
 
 def main() -> None:
