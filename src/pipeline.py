@@ -171,8 +171,13 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Auto-clip a source video into vertical shorts.")
     parser.add_argument("--input", required=True, help="Path to source video (mp4/mov/etc).")
     parser.add_argument("--config", default="config.yaml", help="Path to campaign config yaml.")
+    parser.add_argument(
+        "--description",
+        help="Override config.yaml's campaign.description for this run only "
+             "(e.g. this video's specific brief/guidelines) without editing the file.",
+    )
     args = parser.parse_args()
-    run(args.input, args.config)
+    run(args.input, args.config, description_override=args.description)
 
 
 if __name__ == "__main__":
