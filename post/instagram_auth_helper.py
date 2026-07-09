@@ -13,6 +13,7 @@ back here. Everything after that (token exchange, long-lived exchange,
 looking up your user ID) is automatic.
 """
 import os
+import secrets
 import urllib.parse
 
 import requests
@@ -36,10 +37,15 @@ def main() -> None:
         "redirect_uri": REDIRECT_URI,
         "scope": SCOPE,
         "response_type": "code",
+        # Forces a fresh authorization each run -- without this, revisiting
+        # the same URL can hand back a stale/already-consumed code instead
+        # of minting a new one (this was the actual cause of repeated
+        # "Error validating verification code" failures).
+        "state": secrets.token_urlsafe(12),
     }
     auth_url = f"{AUTHORIZE_URL}?{urllib.parse.urlencode(auth_params)}"
 
-    print("Open this URL, log in, and approve access:\n")
+    print("Open this EXACT URL (it's unique to this run -- don't reuse an old tab/link):\n")
     print(auth_url, "\n")
     print("You'll land on a page showing a code -- copy it and paste it below.")
     code = input("Code: ").strip()
