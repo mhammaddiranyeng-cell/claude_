@@ -26,6 +26,13 @@ import requests
 API_BASE = "https://graph.instagram.com"
 
 
+def _check(resp: requests.Response) -> dict:
+    data = resp.json() if resp.content else {}
+    if not resp.ok:
+        raise RuntimeError(f"Instagram API error (HTTP {resp.status_code}): {data}")
+    return data
+
+
 def publish_reel(video_url: str, caption: str, poll_interval: float = 5.0, timeout: float = 600.0) -> str:
     ig_user_id = os.environ["IG_USER_ID"]
     access_token = os.environ["IG_ACCESS_TOKEN"]
@@ -39,8 +46,7 @@ def publish_reel(video_url: str, caption: str, poll_interval: float = 5.0, timeo
             "access_token": access_token,
         },
     )
-    create_resp.raise_for_status()
-    creation_id = create_resp.json()["id"]
+    creation_id = _check(create_resp)["id"]
 
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
@@ -48,8 +54,7 @@ def publish_reel(video_url: str, caption: str, poll_interval: float = 5.0, timeo
             f"{API_BASE}/{creation_id}",
             params={"fields": "status_code", "access_token": access_token},
         )
-        status_resp.raise_for_status()
-        status_code = status_resp.json().get("status_code")
+        status_code = _check(status_resp).get("status_code")
         if status_code == "FINISHED":
             break
         if status_code == "ERROR":
@@ -62,8 +67,7 @@ def publish_reel(video_url: str, caption: str, poll_interval: float = 5.0, timeo
         f"{API_BASE}/{ig_user_id}/media_publish",
         data={"creation_id": creation_id, "access_token": access_token},
     )
-    publish_resp.raise_for_status()
-    return publish_resp.json()["id"]
+    return _check(publish_resp)["id"]
 
 
 def get_permalink(media_id: str) -> str:
@@ -72,5 +76,4 @@ def get_permalink(media_id: str) -> str:
         f"{API_BASE}/{media_id}",
         params={"fields": "permalink", "access_token": access_token},
     )
-    resp.raise_for_status()
-    return resp.json()["permalink"]
+    return _check(resp)["permalink"]
