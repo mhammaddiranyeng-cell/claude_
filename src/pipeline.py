@@ -21,12 +21,20 @@ from .style import resolve_editing_config
 from .probe import probe_duration_seconds
 
 
-def run(input_path: str, config_path: str, description_override: str = None) -> str:
-    """Returns the path to the written manifest.json."""
+def run(input_path: str, config_path: str, description_override: str = None, output_subdir: str = None) -> str:
+    """Returns the path to the written manifest.json.
+
+    output_subdir nests this run's clips under output_dir/output_subdir/
+    instead of directly in output_dir -- used when processing multiple
+    videos in one go, so each video's clip_01, clip_02, ... don't overwrite
+    the previous video's before they're posted.
+    """
     with open(config_path) as f:
         cfg = yaml.safe_load(f)
 
     output_dir = cfg.get("output_dir", "./output")
+    if output_subdir:
+        output_dir = os.path.join(output_dir, output_subdir)
     os.makedirs(output_dir, exist_ok=True)
 
     print(f"[1/5] Transcribing {input_path} ...")
