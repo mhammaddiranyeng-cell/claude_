@@ -138,17 +138,14 @@ def upload_video(video_path: str, title: str, privacy_level: str = None) -> str:
     # TikTok's rule: total_chunk_count = video_size // chunk_size (floor),
     # and the LAST chunk absorbs all remaining bytes (can exceed chunk_size,
     # up to 128MB) rather than trailing off as its own small final chunk.
-    # Whenever that floor works out to a single chunk (video_size <=
-    # CHUNK_SIZE, not just <= 5MB), the declared chunk_size must equal the
-    # actual video_size -- declaring the fixed CHUNK_SIZE while only sending
-    # video_size bytes in that one chunk is a mismatch TikTok rejects as
+    # Whenever that floor works out to a single chunk -- which happens for
+    # ANY video_size up to 2x CHUNK_SIZE, not just video_size <= CHUNK_SIZE
+    # -- the loop below reads to EOF for that one "last" chunk regardless
+    # of the nominal CHUNK_SIZE, so the declared chunk_size must equal the
+    # actual video_size in every one-chunk case or TikTok rejects it as
     # "invalid_params: chunk size is invalid".
-    if video_size <= CHUNK_SIZE:
-        chunk_size = video_size
-        total_chunks = 1
-    else:
-        chunk_size = CHUNK_SIZE
-        total_chunks = max(1, video_size // chunk_size)
+    total_chunks = max(1, video_size // CHUNK_SIZE)
+    chunk_size = video_size if total_chunks == 1 else CHUNK_SIZE
 
     resp, resp_data = _init_post(headers, title, privacy_level, video_size, chunk_size, total_chunks)
     if not resp.ok and resp_data.get("error", {}).get("code") == "unaudited_client_can_only_post_to_private_accounts" \

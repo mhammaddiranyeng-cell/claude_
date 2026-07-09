@@ -18,13 +18,14 @@ you already made for YouTube):
        GCS_SERVICE_ACCOUNT_FILE=./secrets/gcs_service_account.json
 """
 import os
+import time
 import uuid
 from datetime import timedelta
 
 from google.cloud import storage
 
 
-def upload_and_sign(local_path: str, expiration_hours: int = 24) -> str:
+def upload_and_sign(local_path: str, expiration_hours: int = 24, max_attempts: int = 3) -> str:
     bucket_name = os.environ["GCS_BUCKET_NAME"]
     key_file = os.environ["GCS_SERVICE_ACCOUNT_FILE"]
 
@@ -38,6 +39,24 @@ def upload_and_sign(local_path: str, expiration_hours: int = 24) -> str:
     # value). Setting chunk_size forces the resumable-upload protocol to
     # split it into small requests, each retried independently on failure.
     blob.chunk_size = 5 * 1024 * 1024  # 5MB
-    blob.upload_from_filename(local_path, content_type="video/mp4", timeout=(30, 600))
+
+    # Even chunked, some networks still drop a chunk's write mid-transfer
+    # intermittently (observed: succeeds most of the time, occasionally
+    # times out with no HTTP status at all) -- retrying the whole upload a
+    # couple of times covers that instead of failing the post outright.
+    last_error = None
+    for attempt in range(1, max_attempts + 1):
+        try:
+            blob.upload_from_filename(local_path, content_type="video/mp4", timeout=(30, 600))
+            last_error = None
+            break
+        except Exception as e:
+            last_error = e
+            if attempt < max_attempts:
+                wait = 3 * attempt
+                print(f"    GCS upload attempt {attempt} failed ({e}); retrying in {wait}s ...")
+                time.sleep(wait)
+    if last_error:
+        raise RuntimeError(f"GCS upload failed after {max_attempts} attempts: {last_error}")
 
     return blob.generate_signed_url(expiration=timedelta(hours=expiration_hours), version="v4")

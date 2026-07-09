@@ -21,34 +21,47 @@ from . import youtube_post, tiktok_post, instagram_post, gcs_upload
 
 
 def post_one(clip: dict, platforms: list, public: bool, instagram_video_url: str = None) -> list:
-    """Returns a list of (platform, url_or_note) tuples for whatever was posted."""
+    """Returns a list of (platform, url_or_note) tuples for whatever was posted.
+
+    Each platform is attempted independently -- one platform failing (e.g.
+    a TikTok API error) no longer skips the remaining ones for this clip.
+    """
     results = []
 
     if "youtube" in platforms:
-        privacy = "public" if public else "private"
-        video_id = youtube_post.upload_short(
-            clip["clip"], title=clip["suggested_caption"][:100], description=clip["suggested_caption"],
-            privacy_status=privacy,
-        )
-        url = f"https://youtube.com/watch?v={video_id}"
-        print(f"  YouTube: uploaded as {privacy}, {url}")
-        results.append(("youtube", url))
+        try:
+            privacy = "public" if public else "private"
+            video_id = youtube_post.upload_short(
+                clip["clip"], title=clip["suggested_caption"][:100], description=clip["suggested_caption"],
+                privacy_status=privacy,
+            )
+            url = f"https://youtube.com/watch?v={video_id}"
+            print(f"  YouTube: uploaded as {privacy}, {url}")
+            results.append(("youtube", url))
+        except Exception as e:
+            print(f"  YouTube: failed, {e}")
 
     if "tiktok" in platforms:
-        publish_id = tiktok_post.upload_video(clip["clip"], title=clip["suggested_caption"])
-        note = f"publish_id={publish_id} (TikTok's API doesn't return a post URL -- check your profile)"
-        print(f"  TikTok: submitted, {note}")
-        results.append(("tiktok", note))
+        try:
+            publish_id = tiktok_post.upload_video(clip["clip"], title=clip["suggested_caption"])
+            note = f"publish_id={publish_id} (TikTok's API doesn't return a post URL -- check your profile)"
+            print(f"  TikTok: submitted, {note}")
+            results.append(("tiktok", note))
+        except Exception as e:
+            print(f"  TikTok: failed, {e}")
 
     if "instagram" in platforms:
-        video_url = instagram_video_url
-        if not video_url:
-            print("  Instagram: uploading clip to Google Cloud Storage for a temporary public URL ...")
-            video_url = gcs_upload.upload_and_sign(clip["clip"])
-        media_id = instagram_post.publish_reel(video_url, caption=clip["suggested_caption"])
-        permalink = instagram_post.get_permalink(media_id)
-        print(f"  Instagram: published, {permalink}")
-        results.append(("instagram", permalink))
+        try:
+            video_url = instagram_video_url
+            if not video_url:
+                print("  Instagram: uploading clip to Google Cloud Storage for a temporary public URL ...")
+                video_url = gcs_upload.upload_and_sign(clip["clip"])
+            media_id = instagram_post.publish_reel(video_url, caption=clip["suggested_caption"])
+            permalink = instagram_post.get_permalink(media_id)
+            print(f"  Instagram: published, {permalink}")
+            results.append(("instagram", permalink))
+        except Exception as e:
+            print(f"  Instagram: failed, {e}")
 
     return results
 
