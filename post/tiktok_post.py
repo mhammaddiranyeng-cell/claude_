@@ -92,12 +92,37 @@ def _pick_privacy_level(options: list) -> str:
     return options[0] if options else "SELF_ONLY"
 
 
+def _init_post(headers: dict, title: str, privacy_level: str, video_size: int, chunk_size: int, total_chunks: int):
+    init_body = {
+        "post_info": {
+            "title": title[:150],
+            "privacy_level": privacy_level,
+            "disable_duet": False,
+            "disable_comment": False,
+            "disable_stitch": False,
+        },
+        "source_info": {
+            "source": "FILE_UPLOAD",
+            "video_size": video_size,
+            "chunk_size": chunk_size,
+            "total_chunk_count": total_chunks,
+        },
+    }
+    resp = requests.post(f"{API_BASE}/post/publish/video/init/", headers=headers, json=init_body)
+    resp_data = resp.json() if resp.content else {}
+    return resp, resp_data
+
+
 def upload_video(video_path: str, title: str, privacy_level: str = None) -> str:
     """Initiates + uploads a direct post. Returns the publish_id to poll for status.
 
     If privacy_level isn't given, it's auto-picked from whatever TikTok's
     creator_info/query says this account can currently post with (the most
-    public option available) -- see module docstring.
+    public option available) -- see module docstring. Note that
+    privacy_level_options reflects the ACCOUNT's own settings, not whether
+    the APP has passed audit -- an unaudited app can still reject anything
+    but SELF_ONLY even if creator_info offered a more public option, so we
+    also catch that specific rejection below and fall back automatically.
     """
     access_token = _refresh_access_token()
     headers = {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}
@@ -120,23 +145,13 @@ def upload_video(video_path: str, title: str, privacy_level: str = None) -> str:
         chunk_size = CHUNK_SIZE
         total_chunks = max(1, video_size // chunk_size)
 
-    init_body = {
-        "post_info": {
-            "title": title[:150],
-            "privacy_level": privacy_level,
-            "disable_duet": False,
-            "disable_comment": False,
-            "disable_stitch": False,
-        },
-        "source_info": {
-            "source": "FILE_UPLOAD",
-            "video_size": video_size,
-            "chunk_size": chunk_size,
-            "total_chunk_count": total_chunks,
-        },
-    }
-    resp = requests.post(f"{API_BASE}/post/publish/video/init/", headers=headers, json=init_body)
-    resp_data = resp.json() if resp.content else {}
+    resp, resp_data = _init_post(headers, title, privacy_level, video_size, chunk_size, total_chunks)
+    if not resp.ok and resp_data.get("error", {}).get("code") == "unaudited_client_can_only_post_to_private_accounts" \
+            and privacy_level != "SELF_ONLY":
+        print(f"  TikTok: app isn't audited yet, {privacy_level} was rejected server-side -- falling back to SELF_ONLY for this post")
+        privacy_level = "SELF_ONLY"
+        resp, resp_data = _init_post(headers, title, privacy_level, video_size, chunk_size, total_chunks)
+
     if not resp.ok or "data" not in resp_data:
         raise RuntimeError(f"TikTok init failed (HTTP {resp.status_code}): {resp_data}")
     data = resp_data["data"]
