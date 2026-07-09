@@ -14,12 +14,16 @@ import functools
 import http.server
 import os
 import shutil
-import socketserver
 import tempfile
 import threading
 from contextlib import contextmanager
 
 from pyngrok import conf, ngrok
+
+
+class _ThreadingHTTPServer(http.server.ThreadingHTTPServer):
+    allow_reuse_address = True
+    daemon_threads = True
 
 
 @contextmanager
@@ -31,7 +35,12 @@ def serve_clip_publicly(local_path: str):
     shutil.copy(local_path, os.path.join(tmp_dir, served_name))
 
     handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=tmp_dir)
-    httpd = socketserver.TCPServer(("localhost", 0), handler)
+    # Threading server: Instagram's fetcher may open multiple/concurrent
+    # connections (e.g. a HEAD probe plus range-based GETs); the plain
+    # single-threaded TCPServer handled these badly, cutting transfers off
+    # with a broken pipe partway through -- which corrupted the video Meta
+    # received and made their processing fail downstream.
+    httpd = _ThreadingHTTPServer(("localhost", 0), handler)
     port = httpd.server_address[1]
 
     thread = threading.Thread(target=httpd.serve_forever, daemon=True)
